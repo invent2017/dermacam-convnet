@@ -22,18 +22,14 @@ def preprocess(disease, first, last, data, label):
     for count in range(first,last+1): #only taking first 48 pics, last 5 to act as a '''test set'''
         string = "processed/" + str(disease) + "/" + str(count) + ".jpg"
         pic = Image.open(string).load()
-        red = []
-        green = []
-        blue = []
+        rgb = []
         for x in range(0,64):
             for y in range(0,64):
-                red.append((pic[x,y][0]))
-                green.append((pic[x,y][1]))
-                blue.append((pic[x,y][2]))
-        rgb = []
-        rgb.append(red)
-        rgb.append(green)
-        rgb.append(blue)
+                rgb.append(pic[x,y])
+        
+        #rgb.append(red)
+        #rgb.append(green)
+        #rgb.append(blue)
 
         data.append(rgb)
         if disease == "acne":
