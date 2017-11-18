@@ -1,3 +1,8 @@
-# dermacam-convnet
+# DermaCam
 
-we tried our best
+### Convolutional Neural Network
+
+Still in the works.
+
+## Installation
+
