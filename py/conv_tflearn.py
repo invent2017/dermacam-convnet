@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[4]:
+# In[1]:
 
 import tensorflow as tf
 import pandas as pd
@@ -12,16 +12,17 @@ from PIL import Image
 
 import tflearn
 from tflearn.layers.core import input_data, dropout, fully_connected
-from tflearn.layers.conv import conv_2d, max_pool_2d
+from tflearn.layers.conv import conv_2d, max_pool_2d, avg_pool_2d
 from tflearn.layers.normalization import local_response_normalization
 from tflearn.layers.estimator import regression
 
 get_ipython().magic('matplotlib inline')
 print(tf.__version__)
+sess = tf.InteractiveSession()
 tf.logging.set_verbosity("INFO")
 
 
-# In[16]:
+# In[2]:
 
 # define preprocessing function
 def preprocess(disease, first, last, data, label):
@@ -38,6 +39,22 @@ def preprocess(disease, first, last, data, label):
             label.append(0)
         elif disease == "ezcema":
             label.append(1)
+        elif disease == "psoriasis":
+            label.append(2)
+        elif disease == "seborrheic keratoses":
+            label.append(3)
+        elif disease == "skin cancer":
+            label.append(4)
+
+def onehot(array,depth):
+    n = array.size
+    onehot = np.zeros((n,depth))
+    for count in range(0,array.size):
+        onehot[count][array[count]] = 1
+        
+    return onehot
+
+
 
 # define training data
 train_data = []
@@ -45,66 +62,88 @@ train_labels = []
 
 preprocess("acne",1,48,train_data,train_labels)
 preprocess("ezcema",1,51,train_data,train_labels)
+preprocess("psoriasis",1,44,train_data,train_labels)
+preprocess("seborrheic keratoses",1,45,train_data,train_labels)
+preprocess("skin cancer",1,45,train_data,train_labels)
     
-train_data = np.asarray(train_data, dtype=np.float32)
-train_labels = np.asarray(train_labels)
-
 # define testing data
 test_data = []
 test_labels = []
 
 preprocess("acne",49,53,test_data,test_labels)
 preprocess("ezcema",52,56,test_data,test_labels)
+preprocess("psoriasis",45,49,test_data,test_labels)
+preprocess("seborrheic keratoses",46,50,test_data,test_labels)
+preprocess("skin cancer",46,50,test_data,test_labels)
 
-test_data = np.asarray(test_data, dtype=np.float32)
+# reshape data
+train_labels = np.asarray(train_labels)
+train_labels = onehot(train_labels,5)
 test_labels = np.asarray(test_labels)
+test_labels = onehot(test_labels,5)
 
-
-# In[19]:
-
-#train_labels = tf.one_hot(indices=tf.cast(train_labels, tf.int32), depth=2)
-#test_labels = tf.one_hot(indices=tf.cast(test_labels, tf.int32), depth=2)
+train_data = np.asarray(train_data, dtype=np.float32)/255
 train_data = train_data.reshape([-1, 64, 64, 3])
+test_data = np.asarray(test_data, dtype=np.float32)/255
 test_data = test_data.reshape([-1, 64, 64, 3])
 
 
-# In[22]:
+# In[3]:
+
+test_labels.shape
+
+
+# In[ ]:
 
 # define network architecture
 # input
 network = input_data(shape=[None, 64, 64, 3], name='input')
 
 # conv 1 and pooling 1
-network = conv_2d(network, 64, 13, activation = "relu")
-network = max_pool_2d(network, [2,2], 2)
+network = conv_2d(network, 128, 16, activation = "relu6", regularizer="L2", weights_init="xavier")
+network = max_pool_2d(network, 2)
+network = local_response_normalization(network)
 
 # conv 2 and pooling 2
-network = conv_2d(network, 96, 13, activation = "relu")
-network = max_pool_2d(network, [2,2], 2)
+network = conv_2d(network, 96, 12, activation = "relu", regularizer="L2", weights_init="xavier")
+network = avg_pool_2d(network, 2)
+network = local_response_normalization(network)
+
+# conv 2 and pooling 2
+network = conv_2d(network, 64, 8, activation = "relu", regularizer="L2", weights_init="xavier")
+network = max_pool_2d(network, 2)
+network = local_response_normalization(network)
 
 # dense and dropout
-network = fully_connected(network, 1024, activation = "relu")
+network = fully_connected(network, 512, activation = "relu", weights_init="xavier")
 network = dropout(network, 0.9)
 
 # logits
-network = fully_connected(network, 2, activation = "softmax")
+network = fully_connected(network, 5, activation = "softmax")
 
 # target
-network = regression(network, optimizer='adam', learning_rate=0.01,
-                     loss='categorical_crossentropy', name='target')
-
-
-# In[23]:
+network = regression(network, optimizer='adagrad', learning_rate=0.0015,
+                     loss='softmax_categorical_crossentropy', name='target')
 
 # training
-dermacam = tflearn.DNN(network, tensorboard_verbose=0)
-dermacam.fit({'input': train_data}, {'target': train_labels}, n_epoch=10,
-           validation_set=({'input': test_data}, {'target': test_labels}),
-           snapshot_step=100, show_metric=True, run_id='convnet_dermacam')
+dermacam = tflearn.DNN(network, tensorboard_verbose=3)
 
-# valueerror when running. something about shapes not matching. i tried commenting out the block above
-# for one_hot with labels. if i leave the line wiht one_hot for labels in, another error arises.
-# for some reason training samples and validation samples logged always seem to be more than the actual
-# number of samples? sometimes i get 297/30 and other times i get 198/20 when there should only be 99/10.
-# 99/10 is expected since data augmentation is not yet done
+
+# In[ ]:
+
+dermacam.fit({'input': train_data}, {'target': train_labels}, n_epoch=15,
+           validation_set=({'input': test_data}, {'target': test_labels}),
+           snapshot_step=10, show_metric=True, run_id='convnet_dermacam')
+
+
+# In[ ]:
+
+dermacam.predict({'input': test_data})
+#0 1 1 1 1 0 1 1 1 1
+
+
+# In[ ]:
+
+dermacam.predict_label({'input': test_data})
+# 0 0 0 0 0 1 1 1 1 1
 
